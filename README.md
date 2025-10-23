@@ -9,11 +9,32 @@ This program was designed by N1FMV and KC1FSZ.
 
 Precise Installation Instructions (Windows)
 ===========================================
+
+* Make sure you have recent version of Python installed on your machine. (I
+tested this process on 23-Oct-2025 using Python 3.14.0)
 * Download nanovna-controller.zip from the release area: https://github.com/brucemack/nanovna-controller/releases
-* Unzip the file.  This will create a base folder that contains the .exe, the config.ini file, and a static folder.  For example: C:\nano.
-* Edit the config.ini file in the base folder:
+* Unzip the file into your PC somewhere.  A good place is C:\nano.  This will create a 
+base folder that contains the .exe, the config.ini file, and a static folder.  You 
+should get something that looks like this:
+
+![Install](docs/dm0.jpg)
+
+* Add your base folder to the Windows PATH.  For example:
+
+            set PATH=c:\nano;%PATH%
+
+* Edit the config.ini file in the base folder using a text editor (like Notepad).
   - Set the workdir to a location where you'd like to store working files created by the controller (i.e., user config files)
   - Set the TCP port you want to listen on for HTTP connections.
+* Plug your NanoVNA into a USB port on your machine. Use the Windows Device Manager to 
+determine which COM port number was assigned to your NanoVNA. This can be found by
+expanding the "Ports (COM & LPT)" option on the Device Manager. In this example,
+my NanoVNA was assigned to COM3:
+
+![Device Manager Example](docs/dm1.jpg)
+
+If you have multiple devices listed and you're having trouble determining which
+one is the NanoVNA, unplug the NanoVNA and see which entry is removed from the list.
 * Open a command prompt.
 * Run the nanovna-controller.exe passing an argument of the base folder.  For example:
 
@@ -21,6 +42,12 @@ Precise Installation Instructions (Windows)
 
 * Point your browser to http://localhost:8081.  Or use whatever port number you have configured in the config.ini file.
 * Use the Administration tab to configure the serial port where the NanoVNA is connected.
+Make sure this matches the COM port number that you determined above.
+* Use the Status tab to check that your NanoVNA is connected. Press the "Refresh Status"
+button and validate that the NanoVNA voltage and firmware versions are reported properly.
+A good connection should look like this:
+
+![Status Tab](docs/dm2.jpg)
 
 Precise Installation Instructions (LINUX)
 =========================================
