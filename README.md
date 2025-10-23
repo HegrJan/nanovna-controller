@@ -10,8 +10,6 @@ This program was designed by N1FMV and KC1FSZ.
 Precise Installation Instructions (Windows)
 ===========================================
 
-* Make sure you have recent version of Python installed on your machine. (I
-tested this process on 23-Oct-2025 using Python 3.14.0)
 * Download nanovna-controller.zip from the release area: https://github.com/brucemack/nanovna-controller/releases
 * Unzip the file into your PC somewhere.  A good place is C:\nano.  This will create a 
 base folder that contains the .exe, the config.ini file, and a static folder.  You 
