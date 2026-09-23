@@ -13,7 +13,7 @@ import sys
 import os
 import util
 import analysis
-import math, cmath 
+import math, cmath
 
 def load_user_config():
     try:
@@ -28,7 +28,7 @@ def save_user_config():
     with open(static_config["workdir"] + "/userconfig.json", "w") as f:
         json.dump(user_config, f)
 
-VERSION = "5"
+VERSION = "6"
 
 # Determine where the script is actually running from 
 run_base_dir = os.path.dirname(os.path.realpath(__file__))
@@ -251,21 +251,13 @@ def sweep():
             raise Exception("There are not enough steps")
         vswr_thresholds = analysis.parse_vswr_thresholds(request.args.get("vswr_thresholds", ""))
 
-        nanovna.run_command("info")
         nanovna.run_command("recall " + str(cal_preset))
-        # Set the sweep range
-        nanovna.run_command("sweep " + str(start_frequency) + " " + str(end_frequency))
         # Get the battery voltage in volts
         #vbat_lines = nv.run_command(ser, "vbat")
         #vbat = float(vbat_lines[0][:-2]) / 1000
-        
-        # Collect the frequencies of the sweep
-        lines = nanovna.run_command("frequencies")
-        frequency_list = [float(line) for line in lines]
-        # Collect the reflection coefficients of the sweep
-        rc_list = nanovna.get_complex_data()
-        if len(frequency_list) != len(rc_list):
-            raise Exception("Data length error")
+
+        # Measure the frequencies and reflection coefficients of the range
+        frequency_list, rc_list = nanovna.measure_s11(start_frequency, end_frequency)
 
         # Analyse the full-resolution sweep (before re-sampling) for the summary
         sweep_analysis = analysis.analyze_sweep(frequency_list, [abs(rc) for rc in rc_list], vswr_thresholds)
