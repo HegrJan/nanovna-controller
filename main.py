@@ -13,6 +13,7 @@ import sys
 import os
 import util
 import math, cmath 
+import time
 
 def load_user_config():
     try:
@@ -28,6 +29,9 @@ def save_user_config():
         json.dump(user_config, f)
 
 VERSION = "5"
+
+# Time for the NanoVNA to complete a fresh sweep after the range is changed
+SWEEP_SETTLE_TIME_S = 4
 
 # Determine where the script is actually running from 
 run_base_dir = os.path.dirname(os.path.realpath(__file__))
@@ -244,10 +248,13 @@ def sweep():
         if step_count == 0:
             raise Exception("There are not enough steps")
 
-        nanovna.run_command("info")
         nanovna.run_command("recall " + str(cal_preset))
         # Set the sweep range
         nanovna.run_command("sweep " + str(start_frequency) + " " + str(end_frequency))
+        # "sweep" returns immediately while the device keeps sweeping in the
+        # background; "data" would return the previous range/calibration until
+        # a new sweep has completed
+        time.sleep(SWEEP_SETTLE_TIME_S)
         # Get the battery voltage in volts
         #vbat_lines = nv.run_command(ser, "vbat")
         #vbat = float(vbat_lines[0][:-2]) / 1000
