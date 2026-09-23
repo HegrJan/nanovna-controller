@@ -4,6 +4,7 @@ import serial
 import glob
 import sys
 import math
+import time
 
 
 class Nanovna:
@@ -28,6 +29,7 @@ class Nanovna:
                 # Open the serial port to the NanoVNA
                 self.ser = serial.Serial(port, timeout=2, write_timeout=2)
                 self.port = port
+                self.flush()
                 logging.info("Connection is good")
             except Exception as ex:
                 logging.error("Unable to open connection", exc_info=True)
@@ -37,6 +39,17 @@ class Nanovna:
                 raise Exception("Unable to connect to NanoVNA")
         else:
             pass
+
+    def flush(self):
+        """
+        Discards anything left in the serial buffers (half-typed commands, a stale
+        prompt, output of an earlier command) so the next response lines up with
+        the next command. Same approach as NanoVNA-Saver's flushSerialBuffers().
+        """
+        self.ser.write(b"\r\n\r\n")
+        time.sleep(0.1)
+        self.ser.reset_input_buffer()
+        self.ser.reset_output_buffer()
 
     def read_response_as_lines(self):
         """
@@ -68,6 +81,8 @@ class Nanovna:
             raise Exception("Not connected")
         logging.info("NanoVNA command: " + command)
         try:
+            # Drop unsolicited leftovers so they aren't taken as this response
+            self.ser.reset_input_buffer()
             self.ser.write((command + "\r").encode("utf-8"))
             lines = self.read_response_as_lines()
         except Exception as ex:
