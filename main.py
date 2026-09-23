@@ -192,10 +192,17 @@ def status():
             logging.warning("Unable to read battery voltage: " + str(vbat_lines))
             vbat = "N/A"
         version_lines = nanovna.run_command("version")
+        info_lines = nanovna.run_command("info")
+        sn_lines = nanovna.run_command("SN")
+        # Firmware that doesn't support SN echoes back "SN?"
+        if not sn_lines or sn_lines[0].strip() == "SN?":
+            sn_lines = ["N/A"]
 
         result = {
             "version": version_lines[0],
-            "voltage": vbat
+            "voltage": vbat,
+            "info": info_lines,
+            "sn": "\n".join(sn_lines)
         }
         return result
 
