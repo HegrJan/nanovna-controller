@@ -30,8 +30,13 @@ def save_user_config():
 
 VERSION = "6"
 
-# Determine where the script is actually running from 
-run_base_dir = os.path.dirname(os.path.realpath(__file__))
+# Determine where the script is actually running from. When frozen by
+# PyInstaller, __file__ points into the temporary extraction folder, so
+# use the location of the executable instead.
+if getattr(sys, "frozen", False):
+    run_base_dir = os.path.dirname(os.path.realpath(sys.executable))
+else:
+    run_base_dir = os.path.dirname(os.path.realpath(__file__))
 
 # Check to see if the user specified an explicit base directory
 if len(sys.argv) >= 2:
