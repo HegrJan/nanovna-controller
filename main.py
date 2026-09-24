@@ -57,10 +57,10 @@ logging.info("Base directory is " + base_dir)
 # Make sure the config file and static directories exist
 if not os.path.exists(base_dir + "/config.ini"):
     logging.error("config.ini is not found")
-    quit()
+    sys.exit(1)
 if not os.path.exists(base_dir + "/static"):
     logging.error("static directory is not found")
-    quit()
+    sys.exit(1)
 
 # Load .ini file
 config = configparser.ConfigParser()
