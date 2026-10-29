@@ -11,7 +11,7 @@ Precise Installation Instructions (Windows)
 ===========================================
 
 * Download nanovna-controller-vN-windows-x64.zip (where N is the version) from the release area: https://github.com/HegrJan/nanovna-controller/releases
-* Optionally verify the download against the SHA-256 checksum published next to the zip (the .sha256 file).  In PowerShell:
+* Optionally verify the download against the SHA-256 checksum shown next to the zip on the release page.  In PowerShell:
 
             (Get-FileHash .\nanovna-controller-vN-windows-x64.zip -Algorithm SHA256).Hash
 
@@ -122,8 +122,8 @@ PyInstaller Packaging
 
 Releases are built by the GitHub Actions workflow in .github/workflows/release.yml.
 Pushing a version tag (e.g. v6, matching VERSION in main.py) builds the .exe, packages it
-with config.ini and the static folder into a zip, and creates a draft release with the zip
-and its SHA-256 checksum.  To build locally instead:
+with config.ini and the static folder into a zip, and creates a draft release with the zip.
+To build locally instead:
 
 * pip install PyInstaller
 * pyinstaller --onefile main.py --name nanovna-controller
@@ -159,6 +159,10 @@ Version 6
   * A list of local VSWR minima and maxima (small noise-level wiggles are ignored).
   * The frequency ranges where the VSWR is at or below one or more thresholds (new "VSWR Thresholds" field, default "1.2, 1.5"), including the best VSWR within each range.
 * Measurements use the NanoVNA's `scan` command when the firmware supports it (fresh data, no fixed wait). Firmwares without a usable `scan` fall back to `sweep` followed by reading `frequencies`/`data`.
+* The Status page also shows the device serial number and device info.
+* Fixed the Status page failing when the firmware doesn't support the `vbat` command (battery voltage is shown as N/A).
+* The Windows executable now finds config.ini and the static folder in its own folder, so the base folder argument is optional.
+* Upgraded the bundled third-party libraries: jQuery 3.5.1 to 3.7.1 and Handlebars 4.7.6 to 4.7.8.
 
 Version 5
 ---------

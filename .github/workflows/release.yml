@@ -1,8 +1,8 @@
 name: Release
 
 # Pushing a version tag (e.g. v6) builds the Windows package and creates a
-# draft GitHub release with the zip and its SHA-256 checksum. A manual run
-# builds the same package and keeps it as a workflow artifact only.
+# draft GitHub release with the zip. A manual run builds the same package
+# and keeps it as a workflow artifact only.
 on:
   push:
     tags:
@@ -36,7 +36,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.14'
           cache: pip
           cache-dependency-path: requirements-windows.txt
 
@@ -126,19 +126,14 @@ jobs:
           Write-Output "Smoke test passed"
           exit 0
 
-      - name: Create zip and checksum
+      - name: Create zip
         run: |
           $out = Join-Path $env:GITHUB_WORKSPACE out
           New-Item -ItemType Directory -Path $out | Out-Null
           $zipName = "${{ steps.meta.outputs.package }}.zip"
           $zip = Join-Path $out $zipName
           Compress-Archive -Path (Join-Path $env:STAGE_DIR '*') -DestinationPath $zip -CompressionLevel Optimal
-          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-          # sha256sum format with LF so that `sha256sum -c` works as well
-          [IO.File]::WriteAllText("$zip.sha256", "$hash  $zipName`n")
-          Write-Output "$zipName"
-          Write-Output "SHA-256: $hash"
-          "SHA256=$hash" >> $env:GITHUB_ENV
+          Write-Output "$zipName SHA-256: $((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower())"
 
       - name: Attest build provenance
         if: steps.meta.outputs.release == 'true'
@@ -152,9 +147,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.meta.outputs.package }}
-          path: |
-            out/${{ steps.meta.outputs.package }}.zip
-            out/${{ steps.meta.outputs.package }}.zip.sha256
+          path: out/${{ steps.meta.outputs.package }}.zip
           if-no-files-found: error
 
       - name: Create draft release
@@ -172,59 +165,15 @@ jobs:
             Write-Output "::error file=README.md::No 'Version $number' section in the change notes"
             exit 1
           }
-          $changes = $m.Groups[1].Value.Trim()
-          $zipName = Split-Path $env:ZIP -Leaf
-
-          $template = @'
-          ## What's new
-
-          {{CHANGES}}
-
-          ## Download
-
-          Download `{{ZIP}}`, unzip it into a folder (for example `C:\nano`) and follow the
-          [Windows installation instructions](https://github.com/{{REPO}}#precise-installation-instructions-windows).
-
-          ## Verify the download
-
-          SHA-256 of `{{ZIP}}`:
-
-          ```
-          {{SHA256}}
-          ```
-
-          Windows (PowerShell):
-
-          ```powershell
-          (Get-FileHash .\{{ZIP}} -Algorithm SHA256).Hash
-          ```
-
-          Linux / macOS:
-
-          ```sh
-          sha256sum -c {{ZIP}}.sha256
-          ```
-
-          The zip and the executable carry a signed build provenance attestation:
-
-          ```sh
-          gh attestation verify {{ZIP}} -R {{REPO}}
-          ```
-          '@
-          $notes = $template.
-            Replace('{{CHANGES}}', $changes).
-            Replace('{{ZIP}}', $zipName).
-            Replace('{{SHA256}}', $env:SHA256).
-            Replace('{{REPO}}', $env:GITHUB_REPOSITORY)
-          Set-Content release-notes.md $notes
+          Set-Content release-notes.md $m.Groups[1].Value.Trim()
           Get-Content release-notes.md
 
           gh release view $env:TAG *> $null
           if ($LASTEXITCODE -eq 0) {
             Write-Output "Release $env:TAG already exists, replacing its assets"
-            gh release upload $env:TAG $env:ZIP "$env:ZIP.sha256" --clobber
+            gh release upload $env:TAG $env:ZIP --clobber
           } else {
-            gh release create $env:TAG $env:ZIP "$env:ZIP.sha256" `
+            gh release create $env:TAG $env:ZIP `
               --draft --verify-tag `
               --title "NanoVNA Controller $env:TAG" `
               --notes-file release-notes.md
