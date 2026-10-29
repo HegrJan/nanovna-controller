@@ -10,7 +10,11 @@ This program was designed by N1FMV and KC1FSZ.
 Precise Installation Instructions (Windows)
 ===========================================
 
-* Download nanovna-controller.zip from the release area: https://github.com/brucemack/nanovna-controller/releases
+* Download nanovna-controller-vN-windows-x64.zip (where N is the version) from the release area: https://github.com/HegrJan/nanovna-controller/releases
+* Optionally verify the download against the SHA-256 checksum published next to the zip (the .sha256 file).  In PowerShell:
+
+            (Get-FileHash .\nanovna-controller-vN-windows-x64.zip -Algorithm SHA256).Hash
+
 * Unzip the file into your PC somewhere.  A good place is C:\nano.  This will create a 
 base folder that contains the .exe, the config.ini file, and a static folder.  You 
 should get something that looks like this:
@@ -115,6 +119,11 @@ Building Requirements
 
 PyInstaller Packaging
 =====================
+
+Releases are built by the GitHub Actions workflow in .github/workflows/release.yml.
+Pushing a version tag (e.g. v6, matching VERSION in main.py) builds the .exe, packages it
+with config.ini and the static folder into a zip, and creates a draft release with the zip
+and its SHA-256 checksum.  To build locally instead:
 
 * pip install PyInstaller
 * pyinstaller --onefile main.py --name nanovna-controller

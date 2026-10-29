@@ -1,0 +1,232 @@
+name: Release
+
+# Pushing a version tag (e.g. v6) builds the Windows package and creates a
+# draft GitHub release with the zip and its SHA-256 checksum. A manual run
+# builds the same package and keeps it as a workflow artifact only.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Build Windows x64 package
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write       # create the release and upload assets
+      id-token: write       # sign the build provenance attestation
+      attestations: write   # store the attestation
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-windows.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-windows.txt
+
+      - name: Determine version
+        id: meta
+        run: |
+          $isRelease = $env:GITHUB_REF_TYPE -eq "tag"
+          if ($isRelease) {
+            $version = $env:GITHUB_REF_NAME
+            $source = Get-Content main.py -Raw
+            $m = [regex]::Match($source, '(?m)^VERSION\s*=\s*"([^"]+)"')
+            if (-not $m.Success) {
+              Write-Output "::error file=main.py::VERSION constant not found"
+              exit 1
+            }
+            if ($version -ne "v$($m.Groups[1].Value)") {
+              Write-Output "::error file=main.py::Tag $version does not match VERSION = `"$($m.Groups[1].Value)`" in main.py"
+              exit 1
+            }
+          } else {
+            $version = "dev-$($env:GITHUB_SHA.Substring(0, 7))"
+          }
+          $package = "nanovna-controller-$version-windows-x64"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "package=$package" >> $env:GITHUB_OUTPUT
+          "release=$($isRelease.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Output "Building $package"
+
+      - name: Run unit tests
+        run: python -m unittest -v test.test_analysis
+
+      - name: Build executable
+        run: pyinstaller --clean --noconfirm nanovna-controller.spec
+
+      - name: Stage package
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "${{ steps.meta.outputs.package }}"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item dist/nanovna-controller.exe, config.ini, README.md -Destination $stage
+          Copy-Item static -Destination $stage -Recurse
+          Get-ChildItem $stage -Recurse -File -Name
+          "STAGE_DIR=$stage" >> $env:GITHUB_ENV
+
+      - name: Smoke test packaged executable
+        run: |
+          # Run a copy of the package with a writable work directory and check
+          # that the web UI and its static files are served.
+          $smoke = Join-Path $env:RUNNER_TEMP smoke
+          $work = Join-Path $env:RUNNER_TEMP smoke-work
+          Copy-Item $env:STAGE_DIR $smoke -Recurse
+          New-Item -ItemType Directory -Path $work | Out-Null
+          $ini = Join-Path $smoke config.ini
+          (Get-Content $ini) -replace '^workdir=.*', "workdir=$($work.Replace('\', '/'))" | Set-Content $ini
+
+          $proc = Start-Process (Join-Path $smoke nanovna-controller.exe) -ArgumentList "`"$smoke`"" -PassThru -NoNewWindow
+          $ok = $false
+          try {
+            for ($i = 0; $i -lt 30 -and -not $proc.HasExited; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                foreach ($url in 'http://127.0.0.1:8081/', 'http://127.0.0.1:8081/static/main.js') {
+                  $response = Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 5
+                  if ($response.StatusCode -ne 200) { throw "$url returned $($response.StatusCode)" }
+                }
+                $ok = $true
+                break
+              } catch {
+                Write-Output "Waiting for server: $($_.Exception.Message)"
+              }
+            }
+          } finally {
+            # The one-file bootloader runs the app in a child process; kill the tree.
+            if (-not $proc.HasExited) { taskkill /PID $proc.Id /T /F | Out-Null }
+          }
+
+          if (-not $ok) {
+            Write-Output "::error::Packaged executable did not serve the web UI"
+            $log = Join-Path $smoke log.txt
+            if (Test-Path $log) { Get-Content $log }
+            exit 1
+          }
+          Write-Output "Smoke test passed"
+          exit 0
+
+      - name: Create zip and checksum
+        run: |
+          $out = Join-Path $env:GITHUB_WORKSPACE out
+          New-Item -ItemType Directory -Path $out | Out-Null
+          $zipName = "${{ steps.meta.outputs.package }}.zip"
+          $zip = Join-Path $out $zipName
+          Compress-Archive -Path (Join-Path $env:STAGE_DIR '*') -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          # sha256sum format with LF so that `sha256sum -c` works as well
+          [IO.File]::WriteAllText("$zip.sha256", "$hash  $zipName`n")
+          Write-Output "$zipName"
+          Write-Output "SHA-256: $hash"
+          "SHA256=$hash" >> $env:GITHUB_ENV
+
+      - name: Attest build provenance
+        if: steps.meta.outputs.release == 'true'
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            out/${{ steps.meta.outputs.package }}.zip
+            dist/nanovna-controller.exe
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.meta.outputs.package }}
+          path: |
+            out/${{ steps.meta.outputs.package }}.zip
+            out/${{ steps.meta.outputs.package }}.zip.sha256
+          if-no-files-found: error
+
+      - name: Create draft release
+        if: steps.meta.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.version }}
+          ZIP: out/${{ steps.meta.outputs.package }}.zip
+        run: |
+          # Release notes: the matching "Version N" section of the README change notes
+          $number = $env:TAG.Substring(1)
+          $readme = Get-Content README.md -Raw
+          $m = [regex]::Match($readme, "(?ms)^Version $([regex]::Escape($number))\r?\n-+\r?\n(.*?)(?=^Version \S+\r?\n-+|\z)")
+          if (-not $m.Success) {
+            Write-Output "::error file=README.md::No 'Version $number' section in the change notes"
+            exit 1
+          }
+          $changes = $m.Groups[1].Value.Trim()
+          $zipName = Split-Path $env:ZIP -Leaf
+
+          $template = @'
+          ## What's new
+
+          {{CHANGES}}
+
+          ## Download
+
+          Download `{{ZIP}}`, unzip it into a folder (for example `C:\nano`) and follow the
+          [Windows installation instructions](https://github.com/{{REPO}}#precise-installation-instructions-windows).
+
+          ## Verify the download
+
+          SHA-256 of `{{ZIP}}`:
+
+          ```
+          {{SHA256}}
+          ```
+
+          Windows (PowerShell):
+
+          ```powershell
+          (Get-FileHash .\{{ZIP}} -Algorithm SHA256).Hash
+          ```
+
+          Linux / macOS:
+
+          ```sh
+          sha256sum -c {{ZIP}}.sha256
+          ```
+
+          The zip and the executable carry a signed build provenance attestation:
+
+          ```sh
+          gh attestation verify {{ZIP}} -R {{REPO}}
+          ```
+          '@
+          $notes = $template.
+            Replace('{{CHANGES}}', $changes).
+            Replace('{{ZIP}}', $zipName).
+            Replace('{{SHA256}}', $env:SHA256).
+            Replace('{{REPO}}', $env:GITHUB_REPOSITORY)
+          Set-Content release-notes.md $notes
+          Get-Content release-notes.md
+
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Output "Release $env:TAG already exists, replacing its assets"
+            gh release upload $env:TAG $env:ZIP "$env:ZIP.sha256" --clobber
+          } else {
+            gh release create $env:TAG $env:ZIP "$env:ZIP.sha256" `
+              --draft --verify-tag `
+              --title "NanoVNA Controller $env:TAG" `
+              --notes-file release-notes.md
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
