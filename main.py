@@ -30,8 +30,13 @@ def save_user_config():
 
 VERSION = "6"
 
-# Determine where the script is actually running from 
-run_base_dir = os.path.dirname(os.path.realpath(__file__))
+# Determine where the script is actually running from. When frozen by
+# PyInstaller, __file__ points into the temporary extraction folder, so
+# use the location of the executable instead.
+if getattr(sys, "frozen", False):
+    run_base_dir = os.path.dirname(os.path.realpath(sys.executable))
+else:
+    run_base_dir = os.path.dirname(os.path.realpath(__file__))
 
 # Check to see if the user specified an explicit base directory
 if len(sys.argv) >= 2:
@@ -52,10 +57,10 @@ logging.info("Base directory is " + base_dir)
 # Make sure the config file and static directories exist
 if not os.path.exists(base_dir + "/config.ini"):
     logging.error("config.ini is not found")
-    quit()
+    sys.exit(1)
 if not os.path.exists(base_dir + "/static"):
     logging.error("static directory is not found")
-    quit()
+    sys.exit(1)
 
 # Load .ini file
 config = configparser.ConfigParser()
