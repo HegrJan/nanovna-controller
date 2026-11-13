@@ -102,6 +102,30 @@ Designed by N1FMV and KC1FSZ
                 <p>Based on {{analysis.point_count}} measured points.</p>
             </section>
         </script>
+        <script id="template_3" type="text/x-handlebars-template">
+            <section class="cable-result" aria-label="Cable length result">
+                <h2>Cable length result</h2>
+                <ul>
+                    <li>Physical length: {{physical_length_m}} m at velocity factor {{velocity_factor}}</li>
+                    <li>Electrical length: {{electrical_length_m}} m</li>
+                    <li>One-way delay: {{delay_ns}} ns</li>
+                    <li>Far end: {{far_end}} (phase {{far_end_phase_deg}} degrees)</li>
+                    {{#each losses}}
+                    <li>Approximate cable loss at {{frequency_mhz}} MHz: {{loss_db}} dB</li>
+                    {{/each}}
+                    <li>Maximum measurable length with this frequency range: {{max_length_m}} m</li>
+                </ul>
+                {{#if warnings.length}}
+                <h3>Warnings</h3>
+                <ul>
+                    {{#each warnings}}
+                    <li>{{this}}</li>
+                    {{/each}}
+                </ul>
+                {{/if}}
+                <p>Based on {{point_count}} measured points, phase fit deviation {{fit_rms_deg}} degrees.</p>
+            </section>
+        </script>
         <script id="template_2" type="text/x-handlebars-template">
             <div>
                 <p>Battery voltage: {{voltage}}</p>
@@ -118,6 +142,7 @@ $.ajaxSetup({ cache: false });
 var template_0;
 var template_1;
 var template_2;
+var template_3;
 
 // The calibration workflow is a multi-step process.  This variable
 // keeps track of which step we are on.
@@ -130,6 +155,7 @@ $(document).ready(function() {
     template_0 = Handlebars.compile($("#template_0").html());
     template_1 = Handlebars.compile($("#template_1").html());
     template_2 = Handlebars.compile($("#template_2").html());
+    template_3 = Handlebars.compile($("#template_3").html());
     Handlebars.registerPartial("analysis", $("#template_analysis").html());
 
     setupTabNavigation($(".tabs"))
@@ -148,6 +174,15 @@ $(document).ready(function() {
     $("#complex-tab .go").click(function(event) {
         do_complex_sweep($("#complex-tab"))
     });
+
+    // Action button and cable type selection on cable length tab
+    $("#cable-tab .go").click(function(event) {
+        do_cable_length($("#cable-tab"))
+    });
+    $("#cable-tab .cable-type").change(function(event) {
+        updateVelocityFactorInput($("#cable-tab"))
+    });
+    updateVelocityFactorInput($("#cable-tab"))
 
     // Input on administration tab
     $("#administration-tab .port-input").blur(function(event) {
@@ -232,6 +267,13 @@ $(document).ready(function() {
                       id="complex-control"
                       tabindex="-1">
                 Complex Sweep
+              </button>
+              <button role="tab"
+                      aria-selected="false"
+                      aria-controls="cable-tab"
+                      id="cable-control"
+                      tabindex="-1">
+                Cable Length
               </button>
               <button role="tab"
                       aria-selected="false"
@@ -322,6 +364,50 @@ $(document).ready(function() {
                  <div class="result-div"></div>
             </div>
 
+            <!-- ===== Cable Length Panel ================================================ -->
+            <div tabindex="0"
+                 role="tabpanel"
+                 id="cable-tab"
+                 aria-labelledby="cable-control"
+                 hidden="">
+                 <h1>Cable Length Panel</h1>
+                 <p>Calibrate at the point where the cable will be connected, connect one end
+                    of the cable, and leave the far end open or short it.  The cable length
+                    is measured from the phase of the reflection over the frequency range.
+                    Longer cables need a narrower range, shorter cables a higher end frequency.</p>
+                 <form class="control-form">
+                     <label for="s54">Calibration Preset</label>
+                     <select class="s4" id="s54" tabindex="0" name="cal_preset">
+                         <option>0</option>
+                         <option>1</option>
+                         <option>2</option>
+                         <option>3</option>
+                         <option>4</option>
+                     </select>
+                     <label for="s51">Start Frequency in Megahertz</label>
+                     <input class="s1" type="text" id="s51" tabindex="0" name="start_frequency_mhz" value="1"/>
+                     <label for="s52">End Frequency in Megahertz</label>
+                     <input class="s2" type="text" id="s52" tabindex="0" name="end_frequency_mhz" value="30"/>
+                     <label for="s55">Cable Type</label>
+                     <select class="cable-type" id="s55" tabindex="0" name="cable_type">
+                         <option value="0.66">Solid polyethylene, RG-58, RG-213, RG-8, RG-174, RG-59, velocity factor 0.66</option>
+                         <option value="0.70">PTFE, RG-316, RG-142, RG-400, velocity factor 0.70</option>
+                         <option value="0.79">H155, velocity factor 0.79</option>
+                         <option value="0.80">LMR-195, velocity factor 0.80</option>
+                         <option value="0.83">Aircell 7, H2000 Flex, velocity factor 0.83</option>
+                         <option value="0.84">LMR-240, velocity factor 0.84</option>
+                         <option value="0.85">LMR-400, velocity factor 0.85</option>
+                         <option value="0.86">Ecoflex 10, Ecoflex 15, velocity factor 0.86</option>
+                         <option value="custom">Custom velocity factor</option>
+                     </select>
+                     <label for="s56">Custom Velocity Factor</label>
+                     <input class="vf-input" type="text" id="s56" tabindex="0" name="velocity_factor" value="0.66"/>
+                     <button id="s53" class="go" tabindex="0">Measure</button>
+                 </form>
+                 <br/>
+                 <div class="result-div"></div>
+            </div>
+
             <!-- ===== Calibration Panel ================================================ -->
             <div tabindex="0"
                  role="tabpanel"
@@ -405,7 +491,7 @@ $(document).ready(function() {
                  id="about-tab"
                  aria-labelledby="about-control"
                  hidden="">
-                 <p>This is version 6.</p>
+                 <p>This is version 7.</p>
                  <p>The NanoVNA control panel was designed by N1FMV and KC1FSZ.</p>
                  <p>Details on the NanoVNA can be found <a href="https://nanovna.com/">here</a>.</p>
                  <p>Details on the NanoVNA command language can be found <a href="https://4ham.ru/wp-content/uploads/2020/05/NanoVNA_Console_Commands_Dec-9-19-1.pdf">here</a>.</p>

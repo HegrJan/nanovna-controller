@@ -153,6 +153,13 @@ Links
 Change Notes
 ============
 
+Version 7
+---------
+* New Cable Length panel that measures the length of a coax cable connected to the calibrated port, with its far end left open or shorted:
+  * The length is computed from the slope of the S11 phase over the frequency range (a straight-line fit over all measured points), using the velocity factor of the selected cable type (common cables are listed, or a custom velocity factor can be entered).
+  * Also shows the electrical length, the one-way delay, whether the far end looks open or shorted, and the approximate cable loss at the start, middle and end frequency.
+  * The maximum measurable length depends on the frequency range (the default 1 to 30 MHz measures up to about 170 m of solid polyethylene cable); warnings are shown when the cable is close to that limit, too short for the range, or when the far end looks terminated.
+
 Version 6
 ---------
 * Sweep and complex sweep panels now show an analysis below the result table, computed from the full-resolution sweep data:

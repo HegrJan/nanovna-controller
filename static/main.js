@@ -242,3 +242,36 @@ function do_status_refresh(panel) {
             }
         });
 }
+
+// Enables the custom velocity factor field only when the "Custom" cable
+// type is selected
+function updateVelocityFactorInput(panel) {
+    var custom = $(panel).find(".cable-type").val() == "custom"
+    $(panel).find(".vf-input").prop("disabled", !custom)
+}
+
+function do_cable_length(panel) {
+
+    var velocityFactor = $(panel).find(".cable-type").val()
+    if (velocityFactor == "custom") {
+        velocityFactor = $(panel).find(".vf-input").val()
+    }
+
+    // Get the form inputs
+    var params = {
+        cal_preset: $(panel).find(".s4").val(),
+        start_frequency_mhz: $(panel).find(".s1").val(),
+        end_frequency_mhz: $(panel).find(".s2").val(),
+        velocity_factor: velocityFactor
+    }
+
+    $(panel).find(".result-div").html("<p role='status'>Measuring...</p>")
+    $.get("/api/cable_length", params)
+        .done(function(data) {
+            if (data.error) {
+                $(panel).find(".result-div").html("<p role='alert'>" + data.message + "</p>")
+            } else {
+                $(panel).find(".result-div").html(template_3(data))
+            }
+        });
+}

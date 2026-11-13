@@ -13,6 +13,7 @@ import sys
 import os
 import util
 import analysis
+import cable
 import math, cmath
 
 def load_user_config():
@@ -28,7 +29,7 @@ def save_user_config():
     with open(static_config["workdir"] + "/userconfig.json", "w") as f:
         json.dump(user_config, f)
 
-VERSION = "6"
+VERSION = "7"
 
 # Determine where the script is actually running from. When frozen by
 # PyInstaller, __file__ points into the temporary extraction folder, so
@@ -220,6 +221,53 @@ def status():
         return jsonify(result)
 
 
+def parse_mhz(args, name, label):
+    """ Parses a request parameter given in MHz and returns it in Hz. """
+    if args.get(name, "").strip() == "":
+        raise Exception(label + " is missing")
+    try:
+        return int(float(args.get(name)) * 1000000)
+    except Exception as ex:
+        raise Exception("Invalid " + label.lower() + ": " + str(ex))
+
+
+def parse_frequency_range(args):
+    """ Parses the start/end frequency request parameters into Hz. """
+    start_frequency = parse_mhz(args, "start_frequency_mhz", "Start frequency")
+    end_frequency = parse_mhz(args, "end_frequency_mhz", "End frequency")
+    if start_frequency >= end_frequency:
+        raise Exception("Frequency range was not valid")
+    return start_frequency, end_frequency
+
+
+@app.route("/api/cable_length", methods=["GET"])
+def cable_length():
+    try:
+        # Get connected to the NanoVNA
+        nanovna.connect_if_necessary(user_config["port"])
+
+        if request.args.get("cal_preset", "").strip() == "":
+            raise Exception("Calibration preset is missing")
+        cal_preset = int(request.args.get("cal_preset"))
+        start_frequency, end_frequency = parse_frequency_range(request.args)
+        velocity_factor = cable.parse_velocity_factor(request.args.get("velocity_factor"))
+
+        nanovna.run_command("recall " + str(cal_preset))
+        frequency_list, rc_list = nanovna.measure_s11(start_frequency, end_frequency)
+
+        result = cable.measure_cable(frequency_list, rc_list, velocity_factor)
+        result["error"] = False
+        return jsonify(result)
+
+    except Exception as ex:
+        logging.error("Error in cable length", exc_info=True)
+        result = {
+            "error": True,
+            "message": ex.args[0]
+        }
+        return jsonify(result)
+
+
 @app.route("/api/sweep", methods=["GET", "POST"])
 def sweep():
     try:
@@ -232,20 +280,7 @@ def sweep():
         if request.args.get("cal_preset").strip() == "":
             raise Exception("Calibration preset is missing")
         cal_preset = int(request.args.get("cal_preset"))
-        if request.args.get("start_frequency_mhz").strip() == "":
-            raise Exception("Start frequency is missing")
-        try:
-            start_frequency = int(float(request.args.get("start_frequency_mhz")) * 1000000)
-        except Exception as ex:
-            raise Exception("Invalid start frequency: " + str(ex))
-        if request.args.get("end_frequency_mhz").strip() == "":
-            raise Exception("End frequency is missing")
-        try:
-            end_frequency = int(float(request.args.get("end_frequency_mhz")) * 1000000)
-        except Exception as ex:
-            raise Exception("Invalid end frequency: " + str(ex))
-        if start_frequency >= end_frequency:
-            raise Exception("Frequency range was not valid")
+        start_frequency, end_frequency = parse_frequency_range(request.args)
         if request.args.get("step_frequency_mhz").strip() == "":
             step_count = 10
             step_frequency = (end_frequency - start_frequency) / step_count
