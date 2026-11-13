@@ -90,6 +90,12 @@ function showStepDiv(divSet, step, prepareFunction) {
     }
 }
 
+// Shows an error message in the panel's result area as plain text, so that
+// any user input echoed back in the message is not interpreted as HTML
+function showError(panel, message) {
+    $(panel).find(".result-div").empty().append($("<p role='alert'></p>").text(message))
+}
+
 function do_sweep(panel) {
 
     // Get the form inputs
@@ -106,7 +112,7 @@ function do_sweep(panel) {
     $.get("/api/sweep", params)
         .done(function(data) {
             if (data.error) {
-                $(panel).find(".result-div").html("<p role='alert'>" + data.message + "</p>")
+                showError(panel, data.message)
             } else {
                 $(panel).find(".result-div").html(template_0(data))
             }
@@ -129,7 +135,7 @@ function do_complex_sweep(panel) {
     $.get("/api/sweep", params)
         .done(function(data) {
             if (data.error) {
-                $(panel).find(".result-div").html("<p role='alert'>" + data.message + "</p>")
+                showError(panel, data.message)
             } else {
                 $(panel).find(".result-div").html(template_1(data))
             }
@@ -236,7 +242,7 @@ function do_status_refresh(panel) {
     $.get("/api/status")
         .done(function(data) {
             if (data.error) {
-                $(panel).find(".result-div").html("<p role='alert'>" + data.message + "</p>")
+                showError(panel, data.message)
             } else {
                 $(panel).find(".result-div").html(template_2(data))
             }
@@ -269,7 +275,7 @@ function do_cable_length(panel) {
     $.get("/api/cable_length", params)
         .done(function(data) {
             if (data.error) {
-                $(panel).find(".result-div").html("<p role='alert'>" + data.message + "</p>")
+                showError(panel, data.message)
             } else {
                 $(panel).find(".result-div").html(template_3(data))
             }
