@@ -26,15 +26,15 @@ class Run1(unittest.TestCase):
         c = -nanovna.Nanovna.reflection_coefficient_to_c(rc_list[0], f_list[0])
 
         r = 0.999999999999
-        self.assertEqual("1F", util.fmt_si(r) + "F")
+        self.assertEqual("1 F", util.fmt_si(r, "F"))
         r = 1.0
-        self.assertEqual("1F", util.fmt_si(r) + "F")
+        self.assertEqual("1 F", util.fmt_si(r, "F"))
         r = 11e-3
-        self.assertEqual("11mF", util.fmt_si(r) + "F")
+        self.assertEqual("11 mF", util.fmt_si(r, "F"))
         r = 1.2e-6
-        self.assertEqual("1.2uF", util.fmt_si(r) + "F")
+        self.assertEqual("1.2 uF", util.fmt_si(r, "F"))
         r = 0.2299e-6
-        self.assertEqual("230nF", util.fmt_si(r) + "F")
+        self.assertEqual("230 nF", util.fmt_si(r, "F"))
 
     def test_parse_scan_lines(self):
 

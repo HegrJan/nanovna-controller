@@ -71,7 +71,7 @@ jobs:
           Write-Output "Building $package"
 
       - name: Run unit tests
-        run: python -m unittest -v test.test_analysis test.test_cable
+        run: python -m unittest discover -v -s test -t .
 
       - name: Build executable
         run: pyinstaller --clean --noconfirm nanovna-controller.spec
