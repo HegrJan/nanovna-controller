@@ -106,7 +106,8 @@ Designed by N1FMV and KC1FSZ
             <section class="cable-result" aria-label="Cable length result">
                 <h2>Cable length result</h2>
                 <ul>
-                    <li>Physical length: {{physical_length_m}} m at velocity factor {{velocity_factor}}</li>
+                    <li>Reliability: {{reliability}}</li>
+                    <li>Physical length: {{physical_length_m}} m{{#if length_error_m}} (± {{length_error_m}} m from phase noise){{/if}} at velocity factor {{velocity_factor}}</li>
                     <li>Electrical length: {{electrical_length_m}} m</li>
                     <li>One-way delay: {{delay_ns}} ns</li>
                     <li>Far end: {{far_end}} (phase {{far_end_phase_deg}} degrees)</li>

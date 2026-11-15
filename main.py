@@ -29,7 +29,7 @@ def save_user_config():
     with open(static_config["workdir"] + "/userconfig.json", "w") as f:
         json.dump(user_config, f)
 
-VERSION = "7"
+VERSION = "8"
 
 # Determine where the script is actually running from. When frozen by
 # PyInstaller, __file__ points into the temporary extraction folder, so

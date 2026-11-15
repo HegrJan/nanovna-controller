@@ -72,6 +72,39 @@ class TestCable(unittest.TestCase):
         result = cable.measure_cable(f, cable_rcs(f, 10.0, 0.66, amplitude=0.1), 0.66)
         self.assertIn("terminated", " ".join(result["warnings"]))
 
+    def test_reliability(self):
+        f = frequencies()
+        result = cable.measure_cable(f, cable_rcs(f, 10.0, 0.66), 0.66)
+        self.assertEqual("good", result["reliability"])
+        self.assertEqual("0.00", result["length_error_m"])
+        # Short cable: fair
+        result = cable.measure_cable(f, cable_rcs(f, 1.0, 0.66), 0.66)
+        self.assertEqual("fair", result["reliability"])
+        # Terminated or too long: low
+        result = cable.measure_cable(f, cable_rcs(f, 10.0, 0.66, amplitude=0.1), 0.66)
+        self.assertEqual("low", result["reliability"])
+        self.assertIsNone(result["length_error_m"])
+        result = cable.measure_cable(f, cable_rcs(f, 230.0, 1.0), 1.0)
+        self.assertEqual("low", result["reliability"])
+        self.assertIsNone(result["length_error_m"])
+
+    def test_noisy_fit_is_fair_with_warning(self):
+        f = frequencies()
+        clean = cable_rcs(f, 10.0, 0.66)
+        noisy = [rc * cmath.exp(1j * math.radians(10.0 if i % 2 else -10.0)) for i, rc in enumerate(clean)]
+        result = cable.measure_cable(f, noisy, 0.66)
+        self.assertEqual("fair", result["reliability"])
+        self.assertIn("straight line", " ".join(result["warnings"]))
+        self.assertGreater(float(result["length_error_m"]), 0.0)
+
+    def test_length_error_grows_with_noise(self):
+        f = frequencies()
+        clean = cable_rcs(f, 10.0, 0.66)
+        noisy = [rc * cmath.exp(1j * math.radians(3.0 if i % 2 else -3.0)) for i, rc in enumerate(clean)]
+        result = cable.measure_cable(f, noisy, 0.66)
+        self.assertGreater(float(result["length_error_m"]), 0.0)
+        self.assertEqual("good", result["reliability"])
+
     def test_no_rotation(self):
         f = frequencies()
         with self.assertRaises(Exception):

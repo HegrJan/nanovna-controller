@@ -29,6 +29,9 @@ MIN_MEAN_GAMMA = 0.3
 # RMS deviation of the phase from a straight line above which the far end is
 # probably not a clean open or short
 MAX_FIT_RMS_DEG = 20.0
+# RMS deviation of the phase from a straight line above which the result is
+# rated only "fair"
+FAIR_FIT_RMS_DEG = 5.0
 # Points on each side used for the median |Γ| of a loss estimate
 LOSS_HALF_WINDOW = 2
 
@@ -119,6 +122,12 @@ def measure_cable(frequencies, rcs, velocity_factor):
     fit_rms_deg = math.degrees(math.sqrt(float(np.mean(residual ** 2))))
     phase_at_zero_deg = wrap_degrees(math.degrees(intercept))
 
+    # Standard error of the fitted slope, converted to metres.  It reflects random
+    # phase noise only; a wrong velocity factor is not included.
+    residual_variance = float(np.sum(residual ** 2)) / (len(f) - 2)
+    slope_error = math.sqrt(residual_variance / float(np.sum((f - np.mean(f)) ** 2)))
+    length_error_m = velocity_factor * SPEED_OF_LIGHT * slope_error / (4.0 * math.pi)
+
     gammas = np.abs(rc)
     n = len(f)
     losses = []
@@ -130,19 +139,36 @@ def measure_cable(frequencies, rcs, velocity_factor):
         })
 
     warnings = []
+    unreliable = False
     if physical_length_m > MAX_LENGTH_MARGIN * max_length_m:
+        unreliable = True
         warnings.append("The cable may be longer than this frequency range can measure. "
             "Lower the end frequency or narrow the range and measure again.")
-    if rotation_deg < SHORT_ROTATION_DEG:
+    short_rotation = rotation_deg < SHORT_ROTATION_DEG
+    if short_rotation:
         warnings.append("The cable is short for this frequency range. "
             "Raise the end frequency for better accuracy.")
     if float(np.mean(gammas)) < MIN_MEAN_GAMMA or fit_rms_deg > MAX_FIT_RMS_DEG:
+        unreliable = True
         warnings.append("The far end looks terminated or the cable is very lossy. "
             "Leave the far end open or short it.")
+    elif fit_rms_deg > FAIR_FIT_RMS_DEG:
+        warnings.append("The phase deviates noticeably from a straight line "
+            "(mismatch, adapters or noise). The length may be less accurate.")
+
+    if unreliable:
+        reliability = "low"
+    elif short_rotation or fit_rms_deg > FAIR_FIT_RMS_DEG:
+        reliability = "fair"
+    else:
+        reliability = "good"
 
     return {
         "velocity_factor": "{:.03f}".format(velocity_factor),
         "physical_length_m": _fmt(physical_length_m),
+        # The noise error is meaningless when the result itself is unreliable
+        "length_error_m": None if unreliable else _fmt(length_error_m),
+        "reliability": reliability,
         "electrical_length_m": _fmt(electrical_length_m),
         "delay_ns": _fmt(delay_s * 1e9),
         "far_end": far_end_state(phase_at_zero_deg),

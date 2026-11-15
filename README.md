@@ -153,6 +153,10 @@ Links
 Change Notes
 ============
 
+Version 8
+---------
+* Cable Length results are now rated good, fair or low reliability, and the physical length shows a ± error estimate from phase noise (it doesn't include a wrong velocity factor, and it is hidden when reliability is low). A warning is also shown when the phase deviates noticeably from a straight line.
+
 Version 7
 ---------
 * New Cable Length panel that measures the length of a coax cable connected to the calibrated port, with its far end left open or shorted:
