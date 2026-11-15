@@ -60,7 +60,7 @@ Follow these instructions the first time you are installing/running the controll
 * Make sure you have Python 3.7.3 or greater installed.
 * Clone the Github repo and change into the project directory:
 
-      git clone git clone https://github.com/brucemack/nanovna-controller.git
+      git clone https://github.com/HegrJan/nanovna-controller.git
       cd nanovna-controller
 * The location of your repo is called the base directory. 
 * Setup a Python virtual environment (called dev in this case):
