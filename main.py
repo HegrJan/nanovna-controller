@@ -29,7 +29,7 @@ def save_user_config():
     with open(static_config["workdir"] + "/userconfig.json", "w") as f:
         json.dump(user_config, f)
 
-VERSION = "8"
+VERSION = "9"
 
 # Determine where the script is actually running from. When frozen by
 # PyInstaller, __file__ points into the temporary extraction folder, so
@@ -101,6 +101,12 @@ if not ("port" in user_config):
 else:
     logging.info("Using configured serial port " + user_config["port"])
 
+# Default the number of sweep points
+if not ("points" in user_config):
+    user_config["points"] = nv.SCAN_POINTS
+    save_user_config()
+logging.info("Using " + str(user_config["points"]) + " sweep points")
+
 nanovna = nv.Nanovna()
 
 # Flask routes
@@ -123,9 +129,14 @@ def root():
 def config():
     """ Allows the client to read and write the user configuration parameters. """
     if request.method == "POST":
-        for item in request.form.items():
-            user_config[item[0]] = item[1]
-            logging.info("Changed config value " + item[0] + "=" + item[1])
+        try:
+            changes = nv.validate_config_update(request.form.to_dict())
+        except Exception as ex:
+            logging.warning("Invalid config update: " + str(ex))
+            return jsonify({"error": True, "message": ex.args[0]})
+        for key, value in changes.items():
+            user_config[key] = value
+            logging.info("Changed config value " + key + "=" + str(value))
         save_user_config()
     return jsonify(user_config)
 
@@ -240,6 +251,14 @@ def parse_frequency_range(args):
     return start_frequency, end_frequency
 
 
+def sweep_points():
+    """ The configured number of points to measure (default if not valid). """
+    try:
+        return nv.validate_config_update({"points": str(user_config.get("points", ""))})["points"]
+    except Exception:
+        return nv.SCAN_POINTS
+
+
 @app.route("/api/cable_length", methods=["GET"])
 def cable_length():
     try:
@@ -253,7 +272,7 @@ def cable_length():
         velocity_factor = cable.parse_velocity_factor(request.args.get("velocity_factor"))
 
         nanovna.run_command("recall " + str(cal_preset))
-        frequency_list, rc_list = nanovna.measure_s11(start_frequency, end_frequency)
+        frequency_list, rc_list = nanovna.measure_s11(start_frequency, end_frequency, sweep_points())
 
         result = cable.measure_cable(frequency_list, rc_list, velocity_factor)
         result["error"] = False
@@ -304,7 +323,7 @@ def sweep():
         #vbat = float(vbat_lines[0][:-2]) / 1000
 
         # Measure the frequencies and reflection coefficients of the range
-        frequency_list, rc_list = nanovna.measure_s11(start_frequency, end_frequency)
+        frequency_list, rc_list = nanovna.measure_s11(start_frequency, end_frequency, sweep_points())
 
         # Analyse the full-resolution sweep (before re-sampling) for the summary
         sweep_analysis = analysis.analyze_sweep(frequency_list, [abs(rc) for rc in rc_list], vswr_thresholds)

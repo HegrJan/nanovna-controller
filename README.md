@@ -153,6 +153,11 @@ Links
 Change Notes
 ============
 
+Version 9
+---------
+* The Administration panel has an Apply button. Fields are corrected when you leave them (e.g. `7` becomes `COM7`), but the settings are saved only when Apply is pressed.
+* New Sweep Points setting on the Administration panel (default 101, which works on all devices; many newer devices support 201, 401 or more). If the device doesn't support the number of points, the measurement shows an error asking to lower it. Firmwares without a usable `scan` command keep measuring with the device's own number of points.
+
 Version 8
 ---------
 * Cable Length results are now rated good, fair or low reliability, and the physical length shows a ± error estimate from phase noise (it doesn't include a wrong velocity factor, and it is hidden when reliability is low). A warning is also shown when the phase deviates noticeably from a straight line.

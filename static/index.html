@@ -185,18 +185,16 @@ $(document).ready(function() {
     });
     updateVelocityFactorInput($("#cable-tab"))
 
-    // Input on administration tab
+    // Inputs on administration tab are corrected when leaving them, but
+    // saved only with the Apply button
     $("#administration-tab .port-input").blur(function(event) {
-        var v = $(this).val()
-        // Remove spaces
-        v = v.replace(/\s/g, '');
-        // If a single number is entered, add leading "com"
-        if (!isNaN(v)) {
-          v = "COM" + v
-        }
-        // Replace the modified value
-        $(this).val(v)
-        $.post("/api/config",{ "port": v })
+        $(this).val(normalizePort($(this).val()))
+    });
+    $("#administration-tab .points-input").blur(function(event) {
+        $(this).val(normalizePoints($(this).val(), $(this).data("applied")))
+    });
+    $("#administration-tab .apply").click(function(event) {
+        do_apply_config($("#administration-tab"))
     });
 
     // This is logic needed to make sure that the range of frequencies
@@ -243,7 +241,7 @@ $(document).ready(function() {
 
     // Fill in the initial config values
     $.get("/api/config",function(data) {
-        $("#administration-tab .port-input").val(data.port);
+        showConfig($("#administration-tab"), data);
     });
 
     // Action button on status tab
@@ -469,8 +467,16 @@ $(document).ready(function() {
                  aria-labelledby="administration-control"
                  hidden="">
                  <h1>Administration Panel</h1>
-                 <label for="s41">Serial Port</label>
-                 <input class="port-input" type="text" id="s41" name="serial_port"/>
+                 <form class="control-form">
+                     <label for="s41">Serial Port</label>
+                     <input class="port-input" type="text" id="s41" name="serial_port"/>
+                     <label for="s42">Sweep Points</label>
+                     <input class="points-input" type="number" id="s42" name="points"
+                            min="11" max="10001" step="1"/>
+                     <p>101 points work on all devices; many newer devices support 201, 401 or more.</p>
+                     <button class="apply">Apply</button>
+                 </form>
+                 <div class="result-div"></div>
             </div>
 
             <!-- ===== Status Panel ================================================ -->

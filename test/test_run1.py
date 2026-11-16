@@ -70,5 +70,41 @@ class Run1(unittest.TestCase):
         n = FakeNanovna(["Commands: help exit info echo sweep data frequencies"])
         self.assertFalse(n.supports_scan())
 
+    def test_scan_points_out_of_range(self):
+
+        with self.assertRaises(nanovna.PointsOutOfRangeError):
+            nanovna.Nanovna.parse_scan_lines(["sweep points exceeds range 101"])
+
+        class FakeNanovna(nanovna.Nanovna):
+            def __init__(self):
+                self.scan_supported = True
+                self.ser = object()
+                self.commands = []
+            def run_command(self, command, timeout=None):
+                self.commands.append(command)
+                return ["sweep points exceeds range 101"]
+
+        # The error is reported instead of silently falling back to sweep,
+        # and scan stays enabled for the next measurement
+        n = FakeNanovna()
+        with self.assertRaises(nanovna.PointsOutOfRangeError):
+            n.measure_s11(1000000, 30000000, 401)
+        self.assertEqual(["scan 1000000 30000000 401 3"], n.commands)
+        self.assertTrue(n.scan_supported)
+
+    def test_validate_config_update(self):
+
+        self.assertEqual({"port": "COM7", "points": 401},
+                         nanovna.validate_config_update({"port": " COM7 ", "points": "401"}))
+        self.assertEqual({"points": 11}, nanovna.validate_config_update({"points": "11"}))
+        self.assertEqual({"points": 10001}, nanovna.validate_config_update({"points": "10001"}))
+        for points in ["abc", "", "10", "10002", "101.5"]:
+            with self.assertRaises(Exception):
+                nanovna.validate_config_update({"points": points})
+        with self.assertRaises(Exception):
+            nanovna.validate_config_update({"port": "  "})
+        with self.assertRaises(Exception):
+            nanovna.validate_config_update({"workdir": "x"})
+
 if __name__ == '__main__':
     unittest.main()

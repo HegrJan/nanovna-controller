@@ -11,9 +11,48 @@ SWEEP_SETTLE_TIME_S = 4
 # "scan" answers only once all points are measured, which can take several
 # seconds (more with many points or low frequencies)
 SCAN_TIMEOUT_S = 30
+# Default number of measured points (supported by all devices) and the range
+# accepted in the configuration. The actual maximum depends on the device
+# (e.g. 101 on the original NanoVNA, 401 on the NanoVNA-H4).
 SCAN_POINTS = 101
+MIN_SCAN_POINTS = 11
+MAX_SCAN_POINTS = 10001
 # scan outmask bits: 1 = frequency, 2 = channel 0 (S11)
 SCAN_OUTMASK_FREQ_S11 = 3
+
+
+class PointsOutOfRangeError(Exception):
+    """ The device refused the requested number of scan points. """
+    pass
+
+
+def validate_config_update(form):
+    """
+    Checks the configuration values posted from the Administration panel.
+
+    :param form: A dict of the posted values (strings)
+    :return: A dict of the validated values to store
+    :raises Exception: With a user readable message if a value is invalid
+    """
+    result = {}
+    for key, value in form.items():
+        if key == "port":
+            port = value.strip()
+            if port == "":
+                raise Exception("Serial port is missing")
+            result["port"] = port
+        elif key == "points":
+            try:
+                points = int(value.strip())
+            except ValueError:
+                raise Exception("Invalid sweep points: " + value)
+            if points < MIN_SCAN_POINTS or points > MAX_SCAN_POINTS:
+                raise Exception("Sweep points must be between {} and {}".format(
+                    MIN_SCAN_POINTS, MAX_SCAN_POINTS))
+            result["points"] = points
+        else:
+            raise Exception("Unknown setting: " + key)
+    return result
 
 
 class Nanovna:
@@ -140,6 +179,12 @@ class Nanovna:
         frequency_list = []
         rc_list = []
         for line in lines:
+            # E.g. "sweep points exceeds range 101" when more points are
+            # requested than the firmware supports
+            if "exceeds range" in line:
+                raise PointsOutOfRangeError(
+                    "The device doesn't support this many points ({}). "
+                    "Lower Sweep Points on the Administration panel.".format(line.strip()))
             tokens = line.split()
             if len(tokens) < 3:
                 raise Exception("Unexpected scan output: " + line)
@@ -154,9 +199,11 @@ class Nanovna:
         Measures S11 with "scan", which returns only after a fresh measurement of
         the requested range (with the active calibration applied).
         """
+        # More points take proportionally longer to measure
+        timeout = max(SCAN_TIMEOUT_S, SCAN_TIMEOUT_S * points / SCAN_POINTS)
         lines = self.run_command("scan {} {} {} {}".format(
-            int(start_frequency), int(end_frequency), points, SCAN_OUTMASK_FREQ_S11),
-            timeout=SCAN_TIMEOUT_S)
+            int(start_frequency), int(end_frequency), int(points), SCAN_OUTMASK_FREQ_S11),
+            timeout=timeout)
         return self.parse_scan_lines(lines)
 
     def sweep_s11(self, start_frequency, end_frequency):
@@ -176,17 +223,22 @@ class Nanovna:
             raise Exception("Data length error")
         return frequency_list, rc_list
 
-    def measure_s11(self, start_frequency, end_frequency):
+    def measure_s11(self, start_frequency, end_frequency, points=SCAN_POINTS):
         """
+        :param points: Number of points to measure with "scan"; the sweep
+            fallback uses the device's own number of points
         :return: A list of frequencies and a list of complex reflection
             coefficients for the range, using "scan" when the firmware supports
             it and the sweep/readout otherwise
         """
         if self.supports_scan():
             try:
-                result = self.scan_s11(start_frequency, end_frequency)
+                result = self.scan_s11(start_frequency, end_frequency, points)
                 logging.info("Measured with scan")
                 return result
+            except PointsOutOfRangeError:
+                # scan works, only the point count is too high for this device
+                raise
             except Exception:
                 # A dropped connection isn't a firmware limitation
                 if self.ser is None:

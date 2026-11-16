@@ -281,3 +281,66 @@ function do_cable_length(panel) {
             }
         });
 }
+
+// Limits of the sweep points setting (same as on the server)
+var MIN_SWEEP_POINTS = 11
+var MAX_SWEEP_POINTS = 10001
+var DEFAULT_SWEEP_POINTS = 101
+
+// Corrects a serial port entry: removes spaces and turns a bare number
+// into a COM port name
+function normalizePort(v) {
+    v = v.replace(/\s/g, '')
+    if (v != "" && !isNaN(v)) {
+        v = "COM" + v
+    }
+    return v
+}
+
+// Corrects a sweep points entry: an invalid entry returns the fallback
+// value, a number out of range is clamped
+function normalizePoints(v, fallback) {
+    var n = parseInt(String(v).trim(), 10)
+    if (isNaN(n)) {
+        n = parseInt(fallback, 10)
+        if (isNaN(n)) {
+            n = DEFAULT_SWEEP_POINTS
+        }
+    }
+    return Math.min(MAX_SWEEP_POINTS, Math.max(MIN_SWEEP_POINTS, n))
+}
+
+// Fills the administration inputs with the saved configuration
+function showConfig(panel, data) {
+    $(panel).find(".port-input").val(data.port)
+    var points = data.points || DEFAULT_SWEEP_POINTS
+    $(panel).find(".points-input").val(points).data("applied", points)
+}
+
+// Saves the administration inputs on the server
+function do_apply_config(panel) {
+    // Pressing Enter applies without leaving the field, so correct all
+    // fields first
+    var portInput = $(panel).find(".port-input")
+    var pointsInput = $(panel).find(".points-input")
+    portInput.val(normalizePort(portInput.val()))
+    pointsInput.val(normalizePoints(pointsInput.val(), pointsInput.data("applied")))
+
+    var params = {
+        port: portInput.val(),
+        points: pointsInput.val()
+    }
+    $.post("/api/config", params)
+        .done(function(data) {
+            if (data.error) {
+                showError(panel, data.message)
+            } else {
+                showConfig(panel, data)
+                $(panel).find(".result-div").empty().append(
+                    $("<p role='status'></p>").text("Settings saved."))
+            }
+        })
+        .fail(function() {
+            showError(panel, "Unable to save the settings")
+        });
+}
