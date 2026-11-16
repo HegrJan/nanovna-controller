@@ -157,6 +157,9 @@ Version 9
 ---------
 * The Administration panel has an Apply button. Fields are corrected when you leave them (e.g. `7` becomes `COM7`), but the settings are saved only when Apply is pressed.
 * New Sweep Points setting on the Administration panel (default 101, which works on all devices; many newer devices support 201, 401 or more). If the device doesn't support the number of points, the measurement shows an error asking to lower it. Firmwares without a usable `scan` command keep measuring with the device's own number of points.
+* Calibration uses the Sweep Points setting too, so the calibration has the same resolution as the measurements. The point count is sent to the device only when it currently uses a different one (older firmwares don't accept a point count when setting the range; some firmwares also change it with every measurement). If the device doesn't accept the number of points, calibration stops at the frequency range step with an error.
+* Fixed responses getting out of step with commands when the NanoVNA answers slowly (e.g. while finishing a sweep with many points): the response timeout is longer, and an incomplete response is reported as an error instead of being taken as the answer to the next command.
+* The Calibration panel now shows the error message when a calibration step fails, instead of only returning to the first step.
 
 Version 8
 ---------

@@ -11,6 +11,9 @@ SWEEP_SETTLE_TIME_S = 4
 # "scan" answers only once all points are measured, which can take several
 # seconds (more with many points or low frequencies)
 SCAN_TIMEOUT_S = 30
+# Usual response timeout; the device can be busy finishing a sweep for a few
+# seconds before it answers (more with many points)
+RESPONSE_TIMEOUT_S = 10
 # Default number of measured points (supported by all devices) and the range
 # accepted in the configuration. The actual maximum depends on the device
 # (e.g. 101 on the original NanoVNA, 401 on the NanoVNA-H4).
@@ -78,7 +81,7 @@ class Nanovna:
             logging.info("Connection was not open yet: " + port)
             try:
                 # Open the serial port to the NanoVNA
-                self.ser = serial.Serial(port, timeout=2, write_timeout=2)
+                self.ser = serial.Serial(port, timeout=RESPONSE_TIMEOUT_S, write_timeout=2)
                 self.port = port
                 self.scan_supported = None
                 self.flush()
@@ -118,6 +121,10 @@ class Nanovna:
             raise ex
         if len(data) == 0:
             raise Exception("No data received from NanoVNA")
+        # Without the prompt the response is incomplete (timeout); the rest
+        # would arrive later and be taken as the next command's response
+        if not data.endswith(b'ch> '):
+            raise Exception("Timed out waiting for the NanoVNA response")
         # Pull off the last part (not relevant data)
         data = data[:-4]
         # Break into lines and then decode into strings.
@@ -205,6 +212,34 @@ class Nanovna:
             int(start_frequency), int(end_frequency), int(points), SCAN_OUTMASK_FREQ_S11),
             timeout=timeout)
         return self.parse_scan_lines(lines)
+
+    def sweep_point_count(self):
+        """ :return: The number of points the device currently sweeps """
+        return len(self.run_command("frequencies", timeout=SCAN_TIMEOUT_S))
+
+    def set_sweep_range(self, start_frequency, end_frequency, points=SCAN_POINTS):
+        """
+        Sets the device's sweep range and number of points, e.g. before
+        calibrating. The range is set without the number of points first,
+        since older firmwares don't accept it; the number of points is sent
+        only when the device uses a different one (some firmwares also change
+        it with "scan").
+        """
+        self.run_command("sweep {} {}".format(int(start_frequency), int(end_frequency)))
+        if self.sweep_point_count() == points:
+            return
+        # Changing the count makes the device busy for a few seconds, which
+        # can delay the responses beyond the port's default timeout
+        lines = self.run_command("sweep {} {} {}".format(
+            int(start_frequency), int(end_frequency), int(points)), timeout=SCAN_TIMEOUT_S)
+        # Firmwares report a refused count differently ("exceeds range",
+        # a usage text) or ignore it silently, so check what the device uses
+        if self.sweep_point_count() != points:
+            detail = " ".join(line.strip() for line in lines).strip()
+            raise PointsOutOfRangeError(
+                "The device didn't accept {} sweep points{}. "
+                "Lower Sweep Points on the Administration panel.".format(
+                    int(points), " (" + detail + ")" if detail else ""))
 
     def sweep_s11(self, start_frequency, end_frequency):
         """

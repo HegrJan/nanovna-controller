@@ -230,8 +230,12 @@ function doCalStep(panel, step, successCb, errorCb) {
     $.get("/api/calibrate", params)
         .done(function(data) {
             if (data == "OK") {
+                $(panel).find(".result-div").empty()
                 successCb()
             } else {
+                if (data.error) {
+                    showError(panel, "Calibration failed: " + data.message)
+                }
                 errorCb()
             }
         });

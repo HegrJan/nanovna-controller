@@ -92,6 +92,42 @@ class Run1(unittest.TestCase):
         self.assertEqual(["scan 1000000 30000000 401 3"], n.commands)
         self.assertTrue(n.scan_supported)
 
+    def test_set_sweep_range(self):
+
+        class FakeNanovna(nanovna.Nanovna):
+            """ Device that accepts point counts up to max_points """
+            def __init__(self, device_points, max_points, sweep_reply=[]):
+                self.device_points = device_points
+                self.max_points = max_points
+                self.sweep_reply = sweep_reply
+                self.commands = []
+            def run_command(self, command, timeout=None):
+                self.commands.append(command)
+                if command == "frequencies":
+                    return [str(i) for i in range(self.device_points)]
+                tokens = command.split()
+                if len(tokens) == 4 and int(tokens[3]) <= self.max_points:
+                    self.device_points = int(tokens[3])
+                return self.sweep_reply
+
+        # Count already right: plain sweep only, as older firmwares expect
+        n = FakeNanovna(101, 101)
+        n.set_sweep_range(1000000, 30000000, 101)
+        self.assertEqual(["sweep 1000000 30000000", "frequencies"], n.commands)
+        # Count changed: e.g. back to 101 after a scan left the device at 301
+        n = FakeNanovna(301, 301)
+        n.set_sweep_range(1000000, 30000000, 101)
+        self.assertEqual(["sweep 1000000 30000000", "frequencies",
+                          "sweep 1000000 30000000 101", "frequencies"], n.commands)
+        self.assertEqual(101, n.device_points)
+        # Refused with a message, or ignored silently
+        n = FakeNanovna(101, 101, ["sweep points exceeds range 101"])
+        with self.assertRaisesRegex(nanovna.PointsOutOfRangeError, "exceeds range 101"):
+            n.set_sweep_range(1000000, 30000000, 401)
+        n = FakeNanovna(101, 101)
+        with self.assertRaises(nanovna.PointsOutOfRangeError):
+            n.set_sweep_range(1000000, 30000000, 401)
+
     def test_validate_config_update(self):
 
         self.assertEqual({"port": "COM7", "points": 401},

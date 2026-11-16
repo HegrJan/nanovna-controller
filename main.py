@@ -170,8 +170,9 @@ def calibrate():
             if start_frequency >= end_frequency:
                 raise Exception("Frequency range was not valid")
 
-            # Set the sweep range
-            nanovna.run_command("sweep " + str(start_frequency) + " " + str(end_frequency))
+            # Set the sweep range, with the configured number of points so
+            # the calibration has the same resolution as the measurements
+            nanovna.set_sweep_range(start_frequency, end_frequency, sweep_points())
             # Cal short
         elif request.args["step"] == "3":
             nanovna.run_command("cal short")
