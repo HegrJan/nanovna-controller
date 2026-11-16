@@ -127,6 +127,63 @@ Designed by N1FMV and KC1FSZ
                 <p>Based on {{point_count}} measured points, phase fit deviation {{fit_rms_deg}} degrees.</p>
             </section>
         </script>
+        <script id="template_4" type="text/x-handlebars-template">
+            <section class="cable-result" aria-label="Cable TDR result">
+                <h2>Cable TDR result</h2>
+                <ul>
+                    {{#if end.found}}
+                    <li>Main reflection at {{end.distance_m}} m: {{end.description}}</li>
+                    {{else}}
+                    <li>Cable end: not found</li>
+                    {{/if}}
+                    <li>Measured range: {{range_m}} m at velocity factor {{velocity_factor}}</li>
+                    <li>Distance resolution: {{resolution_m}} m</li>
+                </ul>
+                <h3>Reflections along the cable</h3>
+                {{#if events.length}}
+                <ul>
+                    {{#each events}}
+                    <li>{{distance_m}} m: {{description}}, reflection coefficient {{reflection}},
+                        return loss {{return_loss_db}} dB{{#if impedance_before}},
+                        impedance about {{impedance_before}} ohms before
+                        and {{impedance_after}} ohms after{{/if}}</li>
+                    {{/each}}
+                </ul>
+                {{else}}
+                <p>No reflections found.</p>
+                {{/if}}
+                {{#if warnings.length}}
+                <h3>Warnings</h3>
+                <ul>
+                    {{#each warnings}}
+                    <li>{{this}}</li>
+                    {{/each}}
+                </ul>
+                {{/if}}
+                <h3 id="tdr-profile-heading">Approximate impedance along the cable</h3>
+                <table aria-labelledby="tdr-profile-heading">
+                    <thead>
+                        <tr>
+                            <th>Distance in metres</th>
+                            <th>Impedance in ohms</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#each profile}}
+                        <tr>
+                            <td class="number-cell">{{distance_m}}</td>
+                            <td class="number-cell">{{impedance}}</td>
+                        </tr>
+                        {{/each}}
+                    </tbody>
+                </table>
+                <p>Reflections further along the cable read weaker than they are, because of
+                   the cable loss and of the reflections before them, and the impedance
+                   beyond a strong reflection is only a rough estimate.</p>
+                <p>Based on {{point_count}} measured points from {{step_frequency_mhz}}
+                   to {{end_frequency_mhz}} MHz.</p>
+            </section>
+        </script>
         <script id="template_2" type="text/x-handlebars-template">
             <div>
                 <p>Battery voltage: {{voltage}}</p>
@@ -144,6 +201,7 @@ var template_0;
 var template_1;
 var template_2;
 var template_3;
+var template_4;
 
 // The calibration workflow is a multi-step process.  This variable
 // keeps track of which step we are on.
@@ -157,6 +215,7 @@ $(document).ready(function() {
     template_1 = Handlebars.compile($("#template_1").html());
     template_2 = Handlebars.compile($("#template_2").html());
     template_3 = Handlebars.compile($("#template_3").html());
+    template_4 = Handlebars.compile($("#template_4").html());
     Handlebars.registerPartial("analysis", $("#template_analysis").html());
 
     setupTabNavigation($(".tabs"))
@@ -184,6 +243,15 @@ $(document).ready(function() {
         updateVelocityFactorInput($("#cable-tab"))
     });
     updateVelocityFactorInput($("#cable-tab"))
+
+    // Action button and cable type selection on cable TDR tab
+    $("#tdr-tab .go").click(function(event) {
+        do_tdr($("#tdr-tab"))
+    });
+    $("#tdr-tab .cable-type").change(function(event) {
+        updateVelocityFactorInput($("#tdr-tab"))
+    });
+    updateVelocityFactorInput($("#tdr-tab"))
 
     // Inputs on administration tab are corrected when leaving them, but
     // saved only with the Apply button
@@ -273,6 +341,13 @@ $(document).ready(function() {
                       id="cable-control"
                       tabindex="-1">
                 Cable Length
+              </button>
+              <button role="tab"
+                      aria-selected="false"
+                      aria-controls="tdr-tab"
+                      id="tdr-control"
+                      tabindex="-1">
+                Cable TDR
               </button>
               <button role="tab"
                       aria-selected="false"
@@ -407,6 +482,53 @@ $(document).ready(function() {
                  <div class="result-div"></div>
             </div>
 
+            <!-- ===== Cable TDR Panel =================================================== -->
+            <div tabindex="0"
+                 role="tabpanel"
+                 id="tdr-tab"
+                 aria-labelledby="tdr-control"
+                 hidden="">
+                 <h1>Cable TDR Panel</h1>
+                 <p>Shows where along a cable the signal is reflected: the cable end,
+                    faults, bad connectors and changes of impedance.  Calibrate from about
+                    0.05 megahertz up to the maximum frequency at the point where the cable
+                    will be connected, then connect one end of the cable.  The far end may be
+                    open, shorted, terminated or connected to an antenna.  A higher maximum frequency gives a finer
+                    distance resolution.  The maximum cable length must not be shorter than
+                    the cable.</p>
+                 <form class="control-form">
+                     <label for="s64">Calibration Preset</label>
+                     <select class="s4" id="s64" tabindex="0" name="cal_preset">
+                         <option>0</option>
+                         <option>1</option>
+                         <option>2</option>
+                         <option>3</option>
+                         <option>4</option>
+                     </select>
+                     <label for="s61">Maximum Cable Length in Metres</label>
+                     <input class="max-length" type="text" id="s61" tabindex="0" name="max_length_m" value="50"/>
+                     <label for="s62">Maximum Frequency in Megahertz</label>
+                     <input class="max-frequency" type="text" id="s62" tabindex="0" name="max_frequency_mhz" value="300"/>
+                     <label for="s65">Cable Type</label>
+                     <select class="cable-type" id="s65" tabindex="0" name="cable_type">
+                         <option value="0.66">Solid polyethylene, RG-58, RG-213, RG-8, RG-174, RG-59, velocity factor 0.66</option>
+                         <option value="0.70">PTFE, RG-316, RG-142, RG-400, velocity factor 0.70</option>
+                         <option value="0.79">H155, velocity factor 0.79</option>
+                         <option value="0.80">LMR-195, velocity factor 0.80</option>
+                         <option value="0.83">Aircell 7, H2000 Flex, velocity factor 0.83</option>
+                         <option value="0.84">LMR-240, velocity factor 0.84</option>
+                         <option value="0.85">LMR-400, velocity factor 0.85</option>
+                         <option value="0.86">Ecoflex 10, Ecoflex 15, velocity factor 0.86</option>
+                         <option value="custom">Custom velocity factor</option>
+                     </select>
+                     <label for="s66">Custom Velocity Factor</label>
+                     <input class="vf-input" type="text" id="s66" tabindex="0" name="velocity_factor" value="0.66"/>
+                     <button id="s63" class="go" tabindex="0">Measure</button>
+                 </form>
+                 <br/>
+                 <div class="result-div"></div>
+            </div>
+
             <!-- ===== Calibration Panel ================================================ -->
             <div tabindex="0"
                  role="tabpanel"
@@ -498,7 +620,7 @@ $(document).ready(function() {
                  id="about-tab"
                  aria-labelledby="about-control"
                  hidden="">
-                 <p>This is version 7.</p>
+                 <p>This is version 9.</p>
                  <p>The NanoVNA control panel was designed by N1FMV and KC1FSZ.</p>
                  <p>Details on the NanoVNA can be found <a href="https://nanovna.com/">here</a>.</p>
                  <p>Details on the NanoVNA command language can be found <a href="https://4ham.ru/wp-content/uploads/2020/05/NanoVNA_Console_Commands_Dec-9-19-1.pdf">here</a>.</p>

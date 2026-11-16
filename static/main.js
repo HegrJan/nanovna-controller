@@ -260,19 +260,47 @@ function updateVelocityFactorInput(panel) {
     $(panel).find(".vf-input").prop("disabled", !custom)
 }
 
-function do_cable_length(panel) {
-
+// Returns the velocity factor of the selected cable type, or the custom one
+function selectedVelocityFactor(panel) {
     var velocityFactor = $(panel).find(".cable-type").val()
     if (velocityFactor == "custom") {
         velocityFactor = $(panel).find(".vf-input").val()
     }
+    return velocityFactor
+}
+
+function do_tdr(panel) {
+
+    // Get the form inputs
+    var params = {
+        cal_preset: $(panel).find(".s4").val(),
+        max_length_m: $(panel).find(".max-length").val(),
+        max_frequency_mhz: $(panel).find(".max-frequency").val(),
+        velocity_factor: selectedVelocityFactor(panel)
+    }
+
+    $(panel).find(".result-div").html("<p role='status'>Measuring...</p>")
+    $.get("/api/tdr", params)
+        .done(function(data) {
+            if (data.error) {
+                showError(panel, data.message)
+            } else {
+                $(panel).find(".result-div").html(template_4(data))
+            }
+        })
+        .fail(function() {
+            showError(panel, "Unable to measure: no answer from the controller")
+        });
+}
+
+function do_cable_length(panel) {
 
     // Get the form inputs
     var params = {
         cal_preset: $(panel).find(".s4").val(),
         start_frequency_mhz: $(panel).find(".s1").val(),
         end_frequency_mhz: $(panel).find(".s2").val(),
-        velocity_factor: velocityFactor
+        velocity_factor: selectedVelocityFactor(panel)
     }
 
     $(panel).find(".result-div").html("<p role='status'>Measuring...</p>")

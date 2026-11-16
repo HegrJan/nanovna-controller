@@ -158,6 +158,10 @@ Version 9
 * The Administration panel has an Apply button; settings are saved only when it is pressed.
 * New Sweep Points setting (default 101, which works on all devices; many newer devices support 201, 401 or more).
 * Calibration uses the Sweep Points setting too, so it has the same resolution as the measurements.
+* New Cable TDR panel (time domain reflectometry) that locates the cable end, faults, bad connectors and impedance changes along a cable:
+  * Enter the maximum cable length and frequency; a higher frequency gives a finer distance resolution. Calibrate from about 0.05 MHz up to the maximum frequency.
+  * Lists each reflection with its distance, size and the impedance before and after it, and shows the approximate impedance along the cable.
+  * Warns about measurements outside the calibrated range, an inaccurate calibration, a missing cable end, and probable repeat echoes.
 
 Version 8
 ---------

@@ -14,6 +14,7 @@ import os
 import util
 import analysis
 import cable
+import tdr
 import math, cmath
 import functools
 import threading
@@ -306,6 +307,43 @@ def cable_length():
 
     except Exception as ex:
         logging.error("Error in cable length", exc_info=True)
+        result = {
+            "error": True,
+            "message": ex.args[0]
+        }
+        return jsonify(result)
+
+
+@app.route("/api/tdr", methods=["GET"])
+@uses_nanovna
+def cable_tdr():
+    try:
+        # Get connected to the NanoVNA
+        nanovna.connect_if_necessary(user_config["port"])
+
+        if request.args.get("cal_preset", "").strip() == "":
+            raise Exception("Calibration preset is missing")
+        cal_preset = int(request.args.get("cal_preset"))
+        max_length = tdr.parse_max_length(request.args.get("max_length_m"))
+        max_frequency = parse_mhz(request.args, "max_frequency_mhz", "Maximum frequency")
+        velocity_factor = cable.parse_velocity_factor(request.args.get("velocity_factor"))
+        step_frequency, segments, points = tdr.plan_sweep(
+            max_length, max_frequency, velocity_factor, sweep_points())
+
+        nanovna.run_command("recall " + str(cal_preset))
+        calibrated_range = nanovna.sweep_range()
+        frequency_list, rc_list = nanovna.measure_s11_segments(
+            tdr.segment_ranges(step_frequency, segments, points), points)
+
+        result = tdr.analyze_tdr(frequency_list, rc_list, velocity_factor,
+            step_frequency, points * segments)
+        result["warnings"] = tdr.calibration_warnings(calibrated_range, step_frequency,
+            step_frequency * points * segments) + result["warnings"]
+        result["error"] = False
+        return jsonify(result)
+
+    except Exception as ex:
+        logging.error("Error in cable TDR", exc_info=True)
         result = {
             "error": True,
             "message": ex.args[0]

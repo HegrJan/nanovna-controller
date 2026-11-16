@@ -128,6 +128,36 @@ class Run1(unittest.TestCase):
         with self.assertRaises(nanovna.PointsOutOfRangeError):
             n.set_sweep_range(1000000, 30000000, 401)
 
+    def test_sweep_range(self):
+
+        class FakeNanovna(nanovna.Nanovna):
+            def __init__(self, reply):
+                self.reply = reply
+            def run_command(self, command, timeout=None):
+                return self.reply
+
+        self.assertEqual((50000, 300000000), FakeNanovna(["50000 300000000 301"]).sweep_range())
+        self.assertEqual((50000, 300000000), FakeNanovna(["50000 300000000"]).sweep_range())
+        # Answers that can't be read: no check rather than a failure
+        for reply in [[], [""], ["usage: sweep {start(Hz)} [stop(Hz)] [points]"],
+                      ["50000"], ["0 300000000 101"], ["300000000 50000 101"]]:
+            self.assertIsNone(FakeNanovna(reply).sweep_range(), reply)
+
+    def test_measure_s11_segments(self):
+
+        class FakeNanovna(nanovna.Nanovna):
+            def __init__(self):
+                self.calls = []
+            def measure_s11(self, start_frequency, end_frequency, points=nanovna.SCAN_POINTS):
+                self.calls.append((start_frequency, end_frequency, points))
+                return [start_frequency, end_frequency], [complex(start_frequency), complex(end_frequency)]
+
+        n = FakeNanovna()
+        frequencies, rcs = n.measure_s11_segments([(1000, 201000), (202000, 402000)], 201)
+        self.assertEqual([(1000, 201000, 201), (202000, 402000, 201)], n.calls)
+        self.assertEqual([1000, 201000, 202000, 402000], frequencies)
+        self.assertEqual([complex(1000), complex(201000), complex(202000), complex(402000)], rcs)
+
     def test_validate_config_update(self):
 
         self.assertEqual({"port": "COM7", "points": 401},

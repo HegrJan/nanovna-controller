@@ -249,6 +249,21 @@ class Nanovna:
         """ :return: The number of points the device currently sweeps """
         return len(self.run_command("frequencies", timeout=SCAN_TIMEOUT_S))
 
+    def sweep_range(self):
+        """
+        :return: The device's current sweep range (start, end) in Hz, which
+            after "recall" is the range of the recalled calibration, or None
+            when the answer can't be read
+        """
+        try:
+            fields = self.run_command("sweep")[0].split()
+            start_frequency, end_frequency = int(fields[0]), int(fields[1])
+        except (IndexError, ValueError):
+            return None
+        if start_frequency <= 0 or end_frequency <= start_frequency:
+            return None
+        return start_frequency, end_frequency
+
     def set_sweep_range(self, start_frequency, end_frequency, points=SCAN_POINTS):
         """
         Sets the device's sweep range and number of points, e.g. before
@@ -317,6 +332,21 @@ class Nanovna:
         result = self.sweep_s11(start_frequency, end_frequency)
         logging.info("Measured with sweep")
         return result
+
+    def measure_s11_segments(self, ranges, points=SCAN_POINTS):
+        """
+        :param ranges: A list of (start, end) frequency ranges in ascending order
+        :param points: Number of points to measure in each range
+        :return: A list of frequencies and a list of complex reflection
+            coefficients of all the ranges, measured one after another
+        """
+        frequency_list = []
+        rc_list = []
+        for start_frequency, end_frequency in ranges:
+            frequencies, rcs = self.measure_s11(start_frequency, end_frequency, points)
+            frequency_list.extend(frequencies)
+            rc_list.extend(rcs)
+        return frequency_list, rc_list
 
     @staticmethod
     def reflection_coefficient_to_vswr(rc):
