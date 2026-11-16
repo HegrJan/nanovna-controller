@@ -286,10 +286,9 @@ function do_cable_length(panel) {
         });
 }
 
-// Limits of the sweep points setting (same as on the server)
-var MIN_SWEEP_POINTS = 11
-var MAX_SWEEP_POINTS = 10001
-var DEFAULT_SWEEP_POINTS = 101
+// Limits of the sweep points setting, replaced by the server's values
+// (from /api/config) once the configuration is loaded
+var sweepPointsLimits = { min: 11, max: 10001, default: 101 }
 
 // Corrects a serial port entry: removes spaces and turns a bare number
 // into a COM port name
@@ -308,17 +307,23 @@ function normalizePoints(v, fallback) {
     if (isNaN(n)) {
         n = parseInt(fallback, 10)
         if (isNaN(n)) {
-            n = DEFAULT_SWEEP_POINTS
+            n = sweepPointsLimits.default
         }
     }
-    return Math.min(MAX_SWEEP_POINTS, Math.max(MIN_SWEEP_POINTS, n))
+    return Math.min(sweepPointsLimits.max, Math.max(sweepPointsLimits.min, n))
 }
 
 // Fills the administration inputs with the saved configuration
 function showConfig(panel, data) {
+    if (data.points_limits) {
+        sweepPointsLimits = data.points_limits
+    }
     $(panel).find(".port-input").val(data.port)
-    var points = data.points || DEFAULT_SWEEP_POINTS
-    $(panel).find(".points-input").val(points).data("applied", points)
+    var points = data.points || sweepPointsLimits.default
+    $(panel).find(".points-input")
+        .attr("min", sweepPointsLimits.min)
+        .attr("max", sweepPointsLimits.max)
+        .val(points).data("applied", points)
 }
 
 // Saves the administration inputs on the server

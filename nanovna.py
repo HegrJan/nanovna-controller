@@ -1,6 +1,5 @@
 import serial
 import logging
-import serial
 import glob
 import sys
 import math
@@ -14,6 +13,9 @@ SCAN_TIMEOUT_S = 30
 # Usual response timeout; the device can be busy finishing a sweep for a few
 # seconds before it answers (more with many points)
 RESPONSE_TIMEOUT_S = 10
+# flush() takes the device as done answering once nothing more arrives for
+# this long after its prompt
+FLUSH_QUIET_S = 0.2
 # Default number of measured points (supported by all devices) and the range
 # accepted in the configuration. The actual maximum depends on the device
 # (e.g. 101 on the original NanoVNA, 401 on the NanoVNA-H4).
@@ -73,9 +75,7 @@ class Nanovna:
         # Look for the case where the port is changing
         if port != self.port:
             self.port = None
-            if self.ser is not None:
-                self.ser.close()
-                self.ser = None
+            self.disconnect()
         # Look for the case were we need to open the port
         if self.ser is None or not self.ser.isOpen():
             logging.info("Connection was not open yet: " + port)
@@ -88,23 +88,53 @@ class Nanovna:
                 logging.info("Connection is good")
             except Exception as ex:
                 logging.error("Unable to open connection", exc_info=True)
-                self.ser = None
+                self.disconnect()
 
             if self.ser is None:
                 raise Exception("Unable to connect to NanoVNA")
         else:
             pass
 
+    def disconnect(self):
+        """
+        Closes the connection, e.g. after an error left the responses out of
+        step. The port is closed explicitly, since Windows refuses to open a
+        COM port again while an old handle to it is still open.
+        """
+        ser = self.ser
+        self.ser = None
+        if ser is not None:
+            try:
+                ser.close()
+            except Exception:
+                logging.warning("Unable to close the serial port", exc_info=True)
+
     def flush(self):
         """
         Discards anything left in the serial buffers (half-typed commands, a stale
         prompt, output of an earlier command) so the next response lines up with
-        the next command. Same approach as NanoVNA-Saver's flushSerialBuffers().
+        the next command. Similar to NanoVNA-Saver's flushSerialBuffers(), but it
+        waits for the prompts: a device busy finishing a sweep answers only after
+        a few seconds, and a late prompt would be taken as the response to the
+        next command.
         """
-        self.ser.write(b"\r\n\r\n")
-        time.sleep(0.1)
-        self.ser.reset_input_buffer()
-        self.ser.reset_output_buffer()
+        ser = self.ser
+        default_timeout = ser.timeout
+        try:
+            ser.reset_input_buffer()
+            ser.write(b"\r\n\r\n")
+            ser.timeout = RESPONSE_TIMEOUT_S
+            if not ser.read_until(b"ch> ").endswith(b"ch> "):
+                logging.warning("No prompt from NanoVNA while flushing")
+            # Discard the remaining prompts until the device is quiet
+            ser.timeout = FLUSH_QUIET_S
+            deadline = time.monotonic() + RESPONSE_TIMEOUT_S
+            while len(ser.read(1024)) > 0 and time.monotonic() < deadline:
+                pass
+        finally:
+            ser.timeout = default_timeout
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
 
     def read_response_as_lines(self):
         """
@@ -116,9 +146,9 @@ class Nanovna:
         # The ch> prompt is used as the delimiter
         try:
             data = self.ser.read_until(b'ch> ')
-        except Exception as ex:
-            self.ser = None
-            raise ex
+        except Exception:
+            self.disconnect()
+            raise
         if len(data) == 0:
             raise Exception("No data received from NanoVNA")
         # Without the prompt the response is incomplete (timeout); the rest
@@ -149,9 +179,11 @@ class Nanovna:
             ser.reset_input_buffer()
             ser.write((command + "\r").encode("utf-8"))
             lines = self.read_response_as_lines()
-        except Exception as ex:
-            self.ser = None
-            raise ex
+        except Exception:
+            # The rest of the response may still arrive, so start over with a
+            # fresh connection (flushed when it is opened)
+            self.disconnect()
+            raise
         finally:
             ser.timeout = default_timeout
         # We discard the first line because that is the echo of the command

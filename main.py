@@ -15,6 +15,8 @@ import util
 import analysis
 import cable
 import math, cmath
+import functools
+import threading
 
 def load_user_config():
     try:
@@ -108,6 +110,19 @@ if not ("points" in user_config):
 logging.info("Using " + str(user_config["points"]) + " sweep points")
 
 nanovna = nv.Nanovna()
+# Flask serves each request in its own thread, but the NanoVNA answers one
+# command at a time: a status refresh during a sweep would otherwise mix up
+# the commands and responses
+nanovna_lock = threading.Lock()
+
+
+def uses_nanovna(handler):
+    """ Lets the decorated request handler use the NanoVNA exclusively. """
+    @functools.wraps(handler)
+    def wrapper(*args, **kwargs):
+        with nanovna_lock:
+            return handler(*args, **kwargs)
+    return wrapper
 
 # Flask routes
 cli.show_server_banner = lambda *_: None
@@ -138,10 +153,18 @@ def config():
             user_config[key] = value
             logging.info("Changed config value " + key + "=" + str(value))
         save_user_config()
-    return jsonify(user_config)
+    # The limits let the client correct the inputs the same way as the server
+    result = dict(user_config)
+    result["points_limits"] = {
+        "min": nv.MIN_SCAN_POINTS,
+        "max": nv.MAX_SCAN_POINTS,
+        "default": nv.SCAN_POINTS
+    }
+    return jsonify(result)
 
 
 @app.route("/api/calibrate", methods=["GET"])
+@uses_nanovna
 def calibrate():
 
     try:
@@ -173,8 +196,8 @@ def calibrate():
             # Set the sweep range, with the configured number of points so
             # the calibration has the same resolution as the measurements
             nanovna.set_sweep_range(start_frequency, end_frequency, sweep_points())
-            # Cal short
         elif request.args["step"] == "3":
+            # Cal short
             nanovna.run_command("cal short")
         elif request.args["step"] == "4":
             nanovna.run_command("cal open")
@@ -196,6 +219,7 @@ def calibrate():
 
 
 @app.route("/api/status", methods=["GET"])
+@uses_nanovna
 def status():
 
     try:
@@ -261,6 +285,7 @@ def sweep_points():
 
 
 @app.route("/api/cable_length", methods=["GET"])
+@uses_nanovna
 def cable_length():
     try:
         # Get connected to the NanoVNA
@@ -289,6 +314,7 @@ def cable_length():
 
 
 @app.route("/api/sweep", methods=["GET", "POST"])
+@uses_nanovna
 def sweep():
     try:
         # Get connected to the NanoVNA

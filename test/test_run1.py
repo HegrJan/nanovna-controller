@@ -142,5 +142,49 @@ class Run1(unittest.TestCase):
         with self.assertRaises(Exception):
             nanovna.validate_config_update({"workdir": "x"})
 
+    class FakeSerial:
+        """ Serial port whose reads return the given chunks, then nothing """
+        def __init__(self, chunks):
+            self.chunks = list(chunks)
+            self.timeout = 10
+            self.written = []
+            self.closed = False
+        def reset_input_buffer(self):
+            pass
+        def reset_output_buffer(self):
+            pass
+        def write(self, data):
+            self.written.append(data)
+        def read_until(self, expected):
+            return self.chunks.pop(0) if self.chunks else b""
+        def read(self, size):
+            return self.chunks.pop(0) if self.chunks else b""
+        def close(self):
+            self.closed = True
+
+    def test_incomplete_response_closes_port(self):
+
+        # The prompt is missing: the port is closed so it can be reopened
+        ser = self.FakeSerial([b"frequencies\r\n1000000\r\n"])
+        n = nanovna.Nanovna()
+        n.ser = ser
+        with self.assertRaisesRegex(Exception, "Timed out"):
+            n.run_command("frequencies", timeout=30)
+        self.assertTrue(ser.closed)
+        self.assertIsNone(n.ser)
+        self.assertEqual(10, ser.timeout)
+
+    def test_flush_waits_for_late_prompts(self):
+
+        # A busy device sends its prompts late; all of them are consumed so
+        # they aren't taken as the next command's response
+        ser = self.FakeSerial([b"\r\nch> ", b"\r\nch> ", b"ch> "])
+        n = nanovna.Nanovna()
+        n.ser = ser
+        n.flush()
+        self.assertEqual([], ser.chunks)
+        self.assertEqual(10, ser.timeout)
+        self.assertFalse(ser.closed)
+
 if __name__ == '__main__':
     unittest.main()
